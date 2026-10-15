@@ -81,6 +81,22 @@ nix.settings.extra-trusted-public-keys = [
 
 包装器不固化 Git 配置；证书默认使用系统 CA，可通过 `SSL_CERT_FILE`、`NIX_SSL_CERT_FILE` 和 `NODE_EXTRA_CA_CERTS` 覆盖。
 
+### 查看配对链接
+
+如果主机部署将 `orca-server` 的启动输出写入 `/var/lib/orca/startup.log`，可执行以下命令提取配对链接，无需安装 `jq`：
+
+```sh
+grep -oE 'orca://pair\?code=[A-Za-z0-9_-]+' /var/lib/orca/startup.log
+```
+
+将输出的 `orca://pair?code=…` 链接复制到客户端进行配对。该路径由主机部署配置决定，不是本软件包默认创建的日志；若使用其他日志路径，请相应替换。
+
+当前用户能读取日志时无需 `sudo`。若提示权限不足，请由有权限的服务账户或管理员读取；不要放宽日志权限。受 `no new privileges` 限制的环境无法通过 `sudo` 提权。
+
+如果启动输出重定向到该文件且 systemd 配置为 `StandardOutput=null`，`journalctl -u orca-server` 不会显示配对链接。
+
+**配对链接相当于访问凭据，不要公开、提交到仓库或发到群里。**
+
 ## 开发与维护
 
 ### 本地验证
