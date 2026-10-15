@@ -1,31 +1,55 @@
 # nixos-orca
 
-独立的 Orca 原生服务端 Nix 包，仅支持 `x86_64-linux`。初始固定版本为 **1.4.224**，来源是 [stablyai/orca 官方 release](https://github.com/stablyai/orca/releases/tag/v1.4.224) 的 `orca-ide_1.4.224_amd64.deb`；`source.json` 中的 `version`、SHA-256 SRI `hash` 是版本更新的唯一输入。
+用于 NixOS 和 Linux 无桌面环境的 [Orca](https://github.com/stablyai/orca) 服务端 Nix 包。
 
-包提取 release 已有的 `orcad-template` 和 `linux-x64-glibc` 原生模块，使用锁定 nixpkgs 的 Node.js 24 直接运行服务端与 CLI；不启动 Electron、不重编译原生模块，也不依赖其他主机配置仓库。nixpkgs 初始锁定到 `eaad089433ca2bb662274377d33df3d0e51ef28b`。
+从 Orca 官方发行包中提取服务端及预编译原生模块，使用 Nix 提供的 Node.js 运行，无需启动 Electron 或安装桌面环境。适合在远程开发机、虚拟机和常驻服务器上运行 Orca runtime，供 Orca 客户端连接。
 
-## 本地使用与验证
+## 特性与范围
 
-需要支持 flakes 的 Nix 和 Python 3：
+- **无桌面依赖**：只打包服务端运行所需的文件，不包含 Electron。
+- **可复现打包**：通过 `source.json` 固定上游版本和 SHA-256，通过 `flake.lock` 固定 Nix 依赖。
+- **二进制缓存**：提供 Cachix 缓存，减少本地打包开销。
+- **独立集成**：不绑定主机配置、服务账户、数据目录或 Git 身份。
+- **独立命令**：提供 `orca-server` 和 `orca-server-cli`，不占用 `orca` 命令名。
+
+目前仅支持 `x86_64-linux`，复用上游 `linux-x64-glibc` 原生模块，不从源码编译 Orca。
+
+## 快速开始
+
+需要已启用 flakes 的 Nix。
 
 ```sh
-nix build .#orca-server --out-link result
-python3 scripts/smoke.py --package result
+nix build github:CYL96/nixos-orca#orca-server
+./result/bin/orca-server --help
 ./result/bin/orca-server-cli --help
 ```
 
-**集成者获准验证后应执行前两条命令**；它们与 CI 的构建、smoke 命令一致。构建输出提供 `orca-server`、`orca-server-cli`，不覆盖现有的 `orca` 命令。
+`orca-server` 是服务端入口，`orca-server-cli` 用于命令行操作。客户端连接方式参见 [Orca Remote Servers 文档](https://www.onorca.dev/docs/remote-servers)；这两个命令是本项目提供的入口名，与上游 `orca` 命令的调用形式不同，具体参数以各自的 `--help` 为准。
 
-运行时用户数据沿用 Orca 自身基于 `HOME` 的默认行为，亦可按 Orca 支持的方式显式设置 `ORCA_USER_DATA` / `ORCA_USER_DATA_PATH`。wrapper 不固化某台主机的数据目录或 Git 配置。CA 兼容 NixOS 系统默认设置；调用者可通过证书环境变量覆盖。服务账户、数据目录权限、systemd、ACL、防火墙和 Git 身份均由消费者主机管理。
+### 使用二进制缓存
 
-## 主机 flake 消费
+在 NixOS 配置中添加：
 
-将本仓库作为**独立且由主机 `flake.lock` 锁定**的输入，而非复制包实现：
+```nix
+nix.settings.extra-substituters = [
+  "https://nixos-orca-server.cachix.org"
+];
+nix.settings.extra-trusted-public-keys = [
+  "nixos-orca-server.cachix.org-1:quDSJdySzgztwEIYcNbEParCqqwypz9Xi05Do22uyAk="
+];
+```
+
+非 NixOS 环境可将对应的 `extra-substituters` 和 `extra-trusted-public-keys` 设置写入 Nix 配置。缓存地址：[nixos-orca-server.cachix.org](https://nixos-orca-server.cachix.org)。
+
+## 集成到 NixOS flake
+
+在现有 flake 中添加输入，并将包加入目标主机的模块：
 
 ```nix
 {
   inputs.orca.url = "github:CYL96/nixos-orca";
 
+  # 合并到现有 outputs，保留主机原有的 nixpkgs 和模块。
   outputs = { self, nixpkgs, orca, ... }: {
     nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
@@ -41,55 +65,53 @@ python3 scripts/smoke.py --package result
 }
 ```
 
-这是合并进现有 flake 的片段，保留主机原有的 nixpkgs 和模块定义。**不要设置 `inputs.orca.inputs.nixpkgs.follows = "nixpkgs"`**：该包应使用本仓库锁定的 nixpkgs，以与 CI 的 derivation / Cachix 缓存路径一致。主机升级此输入后才会消费新版本；更新 PR、缓存上传均不会自动部署任何服务器。
+保留本项目独立的 nixpkgs 输入，不要设置 `inputs.orca.inputs.nixpkgs.follows = "nixpkgs"`，以保持包派生与 CI 发布的缓存一致。消费者通过自己的 `flake.lock` 锁定本项目；仓库发布新包不会自动升级或部署主机。
 
-## 启用 Cachix
+也提供 `overlays.default`。使用 overlay 会按消费者的 nixpkgs 重新生成派生，可能无法复用本项目发布的缓存。
 
-公开缓存为 [`nixos-orca-server`](https://nixos-orca-server.cachix.org)，公钥已从 [Cachix 公共接口](https://app.cachix.org/api/v1/cache/nixos-orca-server) 核实。缓存创建不等于包已上传；仍需确认 CI build、smoke、publish 和准确输出的缓存覆盖。
+### 运行与持久化
 
-1. 使用已创建的公开缓存 `nixos-orca-server`。
-2. 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Secrets** 配置 Repository secret **`CACHIX_AUTH_TOKEN`**：对此缓存具有写权限的 token，建议缓存专用的最小权限 token。不要提交 token，不要放进 Nix 文件、日志或公开 variable。缓存名已固定在 workflow 中，无需设置 `CACHIX_CACHE` variable。
-3. 在消费者主机的 Nix 配置中启用以下缓存与公钥（GitHub 不需要另填公钥变量）。GitHub 发布凭据不会让主机自动信任缓存：
+本项目提供软件包，不提供 NixOS 服务模块。部署时由主机配置管理：
 
-   ```nix
-   nix.settings.extra-substituters = [ "https://nixos-orca-server.cachix.org" ];
-   nix.settings.extra-trusted-public-keys = [
-     "nixos-orca-server.cachix.org-1:quDSJdySzgztwEIYcNbEParCqqwypz9Xi05Do22uyAk="
-   ];
-   ```
-4. 向 `main` 推送，或在 Actions 手动运行 **Build and publish Orca** 并选择 `main`。确认 build、smoke、publish 均成功后，才能称缓存已发布。
+- **服务账户与状态目录**：运行时默认使用 Orca 基于 `HOME` 的数据目录行为，也可显式设置 `ORCA_USER_DATA` / `ORCA_USER_DATA_PATH`；持久化该目录并限制访问权限。
+- **进程管理**：通过 systemd 或其他进程管理器启动 `orca-server`，配置所需环境、启动参数和重启策略。
+- **项目权限**：只授权需要访问的项目目录，不共享管理员凭据和整个 home。
+- **网络与配对**：配置客户端可达的地址及必要的防火墙规则，将配对链接视为凭据。
+- **Agent 工具**：在服务账户可用的环境中安装并认证需要运行的 Agent CLI。
 
-CI 仅在本仓库 `main` 的 `push` / `workflow_dispatch` 上将 `CACHIX_AUTH_TOKEN` 注入发布 step。PR 只构建与 smoke，不能取得上传 token，也不会上传。手动选择其他分支同样只构建、smoke。发布 step 使用 `nix run --inputs-from . nixpkgs#cachix -- push ...`，从本仓库锁定的 nixpkgs 获取 Cachix CLI，并沿用 Nix 默认可信 `cache.nixos.org`；没有安装自动上传 hook，也不使用会自动上传未测试输出的 action。
+包装器不固化 Git 配置；证书默认使用系统 CA，可通过 `SSL_CERT_FILE`、`NIX_SSL_CERT_FILE` 和 `NODE_EXTRA_CA_CERTS` 覆盖。
 
-## 版本更新
+## 开发与维护
 
-更新脚本仅依赖 Python 标准库。无参数时查询 GitHub 的 latest stable release；`--version` 精确指定不带 `v` 的稳定版本。draft / prerelease、缺少或不匹配的 amd64 资产、网络/API 错误都会直接失败，不会回退到旧 release 或伪造 hash。
+### 本地验证
+
+在仓库根目录执行，需要 Python 3：
 
 ```sh
-# 只检查，不写文件、不下载大型 deb。
-python3 scripts/update.py --check
-
-# 下载官方 deb，流式计算 SHA-256，原子更新 source.json。
-python3 scripts/update.py
-
-# 精确选择稳定版本；初始版本相同则不下载、不改文件。
-python3 scripts/update.py --version 1.4.224
+nix build .#orca-server --out-link result
+python3 scripts/smoke.py --package result
 ```
 
-`--check` 退出码：`0` 为目标版本已锁定，`1` 为版本不同，`2` 为获取/解析错误。普通更新遇到同一版本会保持文件不动，也不会重新下载；这是版本更新器，不是对同名资产重新上传的监控器。不同版本会验证官方资产 URL、下载字节数和 Debian archive 标识，再写入真实内容 hash。可用环境变量 `GITHUB_TOKEN` 提高 GitHub API 限额；token 只用于 API 请求，不打印、不发送到 release CDN。
+Smoke 脚本在临时环境中检查服务启动、加密配对 RPC、Git 项目与 worktree、PTY 及服务重启后的连接行为。
 
-`.github/workflows/update.yml` 每周一检查，也可手动指定版本；只在本仓库 `main` 运行，使用 `GITHUB_TOKEN` 把 `source.json` 的变化提交到 `update/orca` 分支并创建/更新 PR，不直接改 `main`。需在仓库 Actions 设置中允许 **Read and write permissions** 及 **Allow GitHub Actions to create and approve pull requests**；工作流实际仅申请 `contents: write`、`pull-requests: write`。
+### 跟进上游版本
 
-GitHub 默认不会对 `GITHUB_TOKEN` 创建的 PR 再触发 `pull_request` CI。**合并机器人 PR 前，应手动运行 Build and publish Orca，选择 `update/orca` 分支，检查 build 与 smoke 均通过**；这次分支运行不会上传缓存。合并后 `main` CI 再次构建、smoke，成功才上传。更新流程不自动合并、重启服务或修改主机锁文件。
+`source.json` 保存上游版本和发行包 hash。更新脚本仅依赖 Python 标准库：
 
-## Actions 固定版本来源
+```sh
+# 检查最新稳定版，不修改文件、不下载发行包。
+python3 scripts/update.py --check
 
-所有第三方 action 均固定发布版本对应的完整 commit SHA；可从官方仓库 tag API 核对：
+# 下载最新稳定版发行包、计算 SHA-256 并更新 source.json。
+python3 scripts/update.py
+```
 
-| Action | 发布版本 | 固定 commit / 官方证据 |
-| --- | --- | --- |
-| actions/checkout | v7.0.1 | [`3d3c42e5aac5ba805825da76410c181273ba90b1`](https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1) |
-| cachix/install-nix-action | v31.11.2 | [`448cde739abec1eaf0646249e3d25bb8d9bc7702`](https://api.github.com/repos/cachix/install-nix-action/git/ref/tags/v31.11.2) |
-| peter-evans/create-pull-request | v8.1.1 | [`5f6978faf089d4d20b00c7766989d076bb2fc7f1`](https://api.github.com/repos/peter-evans/create-pull-request/git/ref/tags/v8.1.1) |
+可通过 `--version` 指定不带 `v` 前缀的稳定版本。`--check` 退出码：`0` 表示目标版本已锁定，`1` 表示版本不同，`2` 表示查询或解析失败。
 
-本仓库保留原有 `LICENSE`；上游 Orca 发行物的许可与使用条件仍由上游决定。
+GitHub Actions 的 **Propose Orca release update** 每周检查上游，也支持手动指定版本，并创建或更新 `update/orca` PR，不直接修改 `main`。机器人使用 `GITHUB_TOKEN` 创建的 PR 不会自动触发 PR CI；合并前需手动运行 **Build and publish Orca**，选择 `update/orca` 分支检查构建与 smoke。
+
+**Build and publish Orca** 在 PR 上执行构建与 smoke，仅在本仓库 `main` 的推送或手动运行中上传验证后的输出到 Cachix。维护者需配置缓存写入 Secret `CACHIX_AUTH_TOKEN`；更新 PR 还需允许 Actions 写入仓库及创建 PR。工作流不自动合并、修改消费者锁文件或部署服务。
+
+## 许可证
+
+Nix 打包代码见 [LICENSE](LICENSE)，Orca 上游许可证见 [LICENSE.upstream](LICENSE.upstream)。打包产物同时包含相关许可证文件。
