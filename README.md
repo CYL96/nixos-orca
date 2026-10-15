@@ -94,6 +94,8 @@ python3 scripts/smoke.py --package result
 
 Smoke 脚本在临时环境中检查服务启动、加密配对 RPC、Git 项目与 worktree、PTY 及服务重启后的连接行为。
 
+当前锁定版本为 **Orca 1.4.226**，已通过上述构建与 smoke 验证。
+
 ### 跟进上游版本
 
 `source.json` 保存上游版本和发行包 hash。更新脚本仅依赖 Python 标准库：
