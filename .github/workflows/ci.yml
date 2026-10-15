@@ -1,0 +1,50 @@
+name: Build and publish Orca
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Nix
+        uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+      - name: Build native Orca server
+        run: nix build .#orca-server --out-link result
+      - name: Smoke test the exact output
+        run: python3 scripts/smoke.py --package result
+      - name: Publish verified output to Cachix
+        if: >-
+          github.repository == 'CYL96/nixos-orca' &&
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          CACHIX_CACHE: ${{ vars.CACHIX_CACHE }}
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "$CACHIX_CACHE" ]]; then
+            echo '::error::Set repository variable CACHIX_CACHE to the real Cachix cache name before publishing.'
+            exit 1
+          fi
+          if [[ -z "$CACHIX_AUTH_TOKEN" ]]; then
+            echo '::error::Set repository secret CACHIX_AUTH_TOKEN to a write token for CACHIX_CACHE before publishing.'
+            exit 1
+          fi
+          # Resolve the CLI from this flake's pinned nixpkgs; Nix checks the
+          # default cache.nixos.org signatures. No action installs a push hook.
+          nix run --inputs-from . nixpkgs#cachix -- push "$CACHIX_CACHE" "$(readlink -f result)"

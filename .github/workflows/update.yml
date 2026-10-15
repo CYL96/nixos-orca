@@ -1,0 +1,59 @@
+name: Propose Orca release update
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact stable version without v; leave empty for latest stable'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-orca
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'CYL96/nixos-orca' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Resolve release and hash the official asset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ORCA_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "$ORCA_VERSION" ]]; then
+            args+=(--version "$ORCA_VERSION")
+          fi
+          python3 scripts/update.py "${args[@]}"
+      - name: Open or refresh release pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          add-paths: source.json
+          branch: update/orca
+          base: main
+          delete-branch: true
+          commit-message: 'chore: update Orca release source'
+          title: 'chore: update Orca release source'
+          body: |
+            Pin the official stable stablyai/orca amd64 Debian release.
+            The updater streams the actual asset and calculates its SHA-256 SRI hash.
+            Only source.json is changed; this workflow does not deploy a server or publish to Cachix.
+
+            GitHub does not trigger pull_request CI for PRs created with GITHUB_TOKEN.
+            Before merging, run the “Build and publish Orca” workflow manually on
+            branch update/orca and inspect its build and smoke results (no cache upload).
