@@ -2,7 +2,7 @@ name: Propose Orca release update
 
 on:
   schedule:
-    - cron: '23 6 * * 1'
+    - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       version:

@@ -110,7 +110,7 @@ python3 scripts/update.py
 
 可通过 `--version` 指定不带 `v` 前缀的稳定版本。`--check` 退出码：`0` 表示目标版本已锁定，`1` 表示版本不同，`2` 表示查询或解析失败。
 
-GitHub Actions 的 **Propose Orca release update** 每周检查上游，也支持手动指定版本，并创建或更新 `update/orca` PR，不直接修改 `main`。机器人使用 `GITHUB_TOKEN` 创建的 PR 不会自动触发 PR CI；合并前需手动运行 **Build and publish Orca**，选择 `update/orca` 分支检查构建与 smoke。
+GitHub Actions 的 **Propose Orca release update** 每天北京时间 07:00（前一天 UTC 23:00）检查上游，也支持手动指定版本，并创建或更新 `update/orca` PR，不直接修改 `main`。机器人使用 `GITHUB_TOKEN` 创建的 PR 不会自动触发 PR CI；合并前需手动运行 **Build and publish Orca**，选择 `update/orca` 分支检查构建与 smoke。
 
 **Build and publish Orca** 在 PR 上执行构建与 smoke，仅在本仓库 `main` 的推送或手动运行中上传验证后的输出到 Cachix。维护者需配置缓存写入 Secret `CACHIX_AUTH_TOKEN`；更新 PR 还需允许 Actions 写入仓库及创建 PR。工作流不自动合并、修改消费者锁文件或部署服务。
 
