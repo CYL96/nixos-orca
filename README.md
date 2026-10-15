@@ -48,10 +48,8 @@ python3 scripts/smoke.py --package result
 公开缓存为 [`nixos-orca-server`](https://nixos-orca-server.cachix.org)，公钥已从 [Cachix 公共接口](https://app.cachix.org/api/v1/cache/nixos-orca-server) 核实。缓存创建不等于包已上传；仍需确认 CI build、smoke、publish 和准确输出的缓存覆盖。
 
 1. 使用已创建的公开缓存 `nixos-orca-server`。
-2. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：
-   - Repository variable **`CACHIX_CACHE`**：`nixos-orca-server`。
-   - Repository secret **`CACHIX_AUTH_TOKEN`**：对此缓存具有写权限的 token，建议缓存专用的最小权限 token。不要提交 token，不要放进 Nix 文件、日志或公开 variable。
-3. 在消费者主机的 Nix 配置中启用以下缓存与公钥（GitHub 不需要另填公钥变量）。只配置 GitHub variable 不会让主机自动信任缓存：
+2. 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Secrets** 配置 Repository secret **`CACHIX_AUTH_TOKEN`**：对此缓存具有写权限的 token，建议缓存专用的最小权限 token。不要提交 token，不要放进 Nix 文件、日志或公开 variable。缓存名已固定在 workflow 中，无需设置 `CACHIX_CACHE` variable。
+3. 在消费者主机的 Nix 配置中启用以下缓存与公钥（GitHub 不需要另填公钥变量）。GitHub 发布凭据不会让主机自动信任缓存：
 
    ```nix
    nix.settings.extra-substituters = [ "https://nixos-orca-server.cachix.org" ];

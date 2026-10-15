@@ -33,14 +33,10 @@ jobs:
           github.ref == 'refs/heads/main' &&
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
-          CACHIX_CACHE: ${{ vars.CACHIX_CACHE }}
+          CACHIX_CACHE: nixos-orca-server
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         shell: bash
         run: |
-          if [[ -z "$CACHIX_CACHE" ]]; then
-            echo '::error::Set repository variable CACHIX_CACHE to the real Cachix cache name before publishing.'
-            exit 1
-          fi
           if [[ -z "$CACHIX_AUTH_TOKEN" ]]; then
             echo '::error::Set repository secret CACHIX_AUTH_TOKEN to a write token for CACHIX_CACHE before publishing.'
             exit 1
