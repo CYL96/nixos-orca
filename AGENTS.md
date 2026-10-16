@@ -51,6 +51,12 @@ There is no configured lint/format command or development shell. Do not substitu
 - Python tools use only the standard library. The updater uses synchronous HTTP/streaming I/O and explicit validation errors; its exit codes are `0` for success/current pin, `1` for an update found by `--check`, and `2` for handled failures.
 - The smoke harness uses a subprocess plus reader thread/queue, bounded waits, and `try/finally` cleanup—not asyncio. Preserve its disposable HOME/XDG state and isolation from host Orca sessions.
 
+## Documentation Boundaries
+
+- Keep `README.md` focused on installation, usage, deployment responsibilities, and essential maintenance steps; do not add a standalone CI configuration or release-boundary section.
+- Place user-relevant cache publication guarantees in the binary-cache section and required update-PR validation steps in the upstream-update section. Link to the workflows rather than repeating their configuration.
+- Keep maintainer-only CI details—path-filter lists, Secrets, Actions permissions, and branch-protection setup—in workflow comments or `AGENTS.md`, not the README. Avoid repeating guarantees already documented elsewhere in the README.
+
 ## Important Files
 
 - `package.nix`: extraction whitelist, native target overlay, wrapper environment, platform/Node assertions, and installed licenses.
