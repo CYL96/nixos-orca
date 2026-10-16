@@ -2,8 +2,20 @@ name: Build and publish Orca
 
 on:
   pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - '.gitignore'
+      - 'scripts/update.py'
+      - '.github/workflows/update.yml'
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - '.gitignore'
+      - 'scripts/update.py'
+      - '.github/workflows/update.yml'
   workflow_dispatch:
 
 permissions:
