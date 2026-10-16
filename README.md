@@ -48,6 +48,8 @@ nix.settings.extra-trusted-public-keys = [
 
 非 NixOS 环境可在 Nix 配置中设置对应的 `extra-substituters` 和 `extra-trusted-public-keys`。缓存仅用于复用已发布的构建产物；未命中时仍需构建。
 
+本仓库 CI 仅在受信任的 `main` 推送或 `main` 手动运行中，将通过构建和 smoke 验证的产物上传 Cachix。
+
 ## 集成到 NixOS flake
 
 将以下片段合并到现有 flake，保留主机原有的 `nixpkgs` 输入和模块：
@@ -162,15 +164,9 @@ python3 scripts/update.py
 
 指定版本时添加 `--version <版本号>`，版本号不带 `v` 前缀。`--check` 退出码：`0` 表示目标版本已锁定，`1` 表示存在版本差异，`2` 表示处理过的查询、解析等失败。更新脚本本身的变更需显式验证受影响行为，不能依赖构建 CI。
 
-### CI 与发布边界
+[Propose Orca release update](.github/workflows/update.yml) 工作流会定期检查更新，也支持手动指定版本，仅创建或更新 `update/orca` 分支上修改 `source.json` 的 PR，不自动合并。
 
-- **Propose Orca release update**：每天 UTC 23:00（北京时间次日 07:00）检查更新，也支持手动指定版本；仅创建或更新 `update/orca` PR 中的 `source.json`，不直接修改 `main`、发布缓存或部署服务。
-- **更新 PR 合并前必须手动验收**：`GITHUB_TOKEN` 创建的 PR 不会自动触发 PR CI。手动运行 **Build and publish Orca**，选择 `update/orca` 分支，检查构建和 smoke 结果；该分支不会上传缓存。
-- **Build and publish Orca**：PR、`main` 推送及手动触发时构建并 smoke 验证同一输出；仅本仓库受信任的 `main` 推送或 `main` 手动运行可将验证后的产物上传 Cachix。
-
-构建工作流通过 `paths-ignore` 跳过仅涉及 `README.md`、`AGENTS.md`、`.gitignore`、`scripts/update.py`、`.github/workflows/update.yml` 的变更及其任意组合。混合修改其他文件时仍运行；手动触发不受过滤限制。`LICENSE` 和 `LICENSE.upstream` 是安装输入，保留构建 CI 覆盖。若构建或 smoke 开始依赖被忽略项，需同步移除对应过滤。
-
-路径过滤可能使必需的 `build` 检查保持 Pending；启用分支保护前需协调过滤策略。维护者还需配置缓存写入 Secret `CACHIX_AUTH_TOKEN`，并允许 Actions 写入仓库及创建更新 PR。工作流不自动合并或部署服务。
+**自动更新 PR 合并前必须手动验收**：`GITHUB_TOKEN` 创建的 PR 不会自动触发 PR CI。手动运行 [Build and publish Orca](.github/workflows/ci.yml)，选择 `update/orca` 分支，确认构建和 smoke 通过；该分支不会上传缓存。
 
 ## 许可证
 
